@@ -79,6 +79,8 @@ class Matchup:
         self.games_played = len(self.game_ids)
         self.seconds_played += other_matchup.seconds_played
         self.minutes_played = round(self.seconds_played / 60, 1)
+
+        return self
         
     @staticmethod
     def combine_stats(stats_a, stats_b):
@@ -91,8 +93,6 @@ class Matchup:
         stats_a['FG_PCT'] = stats_a['FGM'] * 1.0 / stats_a['FGA']
         stats_a['FG3_PCT'] = stats_a['FG3M'] / stats_a['FG3A']
         stats_a['FT_PCT'] = stats_a['FTM'] * 1.0 / stats_a['FTA']
-
-        # TODO: check implementation is correct
         
         return stats_a
 
@@ -198,3 +198,20 @@ class Matchup:
             self.minutes_played = round(self.seconds_played / 60, 1)
 
         self.last_timestamp = time_of_play
+
+    def calculate_possessions_played(self):
+        tm_1_attempts = self.team_1_stats['FGA'] + 0.4 * self.team_1_stats['FTA']
+        try:
+            tm_1_orebs = 1.07 * (self.team_1_stats['OREB'] * 1.0 / (self.team_1_stats['OREB'] + self.team_1_stats['DREB'])) * (self.team_1_stats['FGA'] - self.team_1_stats['FGM'])
+        except ZeroDivisionError:
+            tm_1_orebs = 0.0
+        tm_1_possessions = tm_1_attempts - tm_1_orebs + self.team_1_stats['TOV']
+
+        tm_2_attempt_term = self.team_2_stats['FGA'] + 0.4 * self.team_2_stats['FTA']
+        try:
+            tm_2_orebs = 1.07 * (self.team_2_stats['OREB'] * 1.0 / (self.team_2_stats['OREB'] + self.team_2_stats['DREB'])) * (self.team_2_stats['FGA'] - self.team_2_stats['FGM'])
+        except ZeroDivisionError:
+            tm_2_orebs = 0.0
+        tm_2_possessions = tm_2_attempt_term - tm_2_orebs + self.team_2_stats['TOV']
+
+        return (tm_1_possessions + tm_2_possessions) / 2

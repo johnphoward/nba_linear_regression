@@ -46,7 +46,8 @@ class DataCollector:
 
         self.request_headers = {
             'Accept': 'application/json, text/plain, */*',
-            'User-Agent': 'Mozilla/5.0 Chrome/54.0.2840.71 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36',
+            'Host': 'stats.nba.com',
             'Referer': 'http://stats.nba.com/game/',
             'Connection': 'keep-alive'
         }
@@ -64,7 +65,7 @@ class DataCollector:
             team_1_id, team_2_id = tuple({play[p1_index] for play in pbp_data if play[p1_index] is not None})
             end_period_row_numbers = [index for index, row in enumerate(pbp_data) if row[2] == self.END_PERIOD_CODE]
 
-            all_lineups = []
+            all_matchups = []
 
             # loop through each period (quarter/OT) and get the relevant lineups for each
             for period_index in range(len(end_period_row_numbers)):
@@ -75,9 +76,9 @@ class DataCollector:
                 plays_in_period = pbp_data[start_index: end_index]
 
                 period_lineups = self.parse_out_lineups_for_period(period_number, plays_in_period, team_1_id, team_2_id)
-                all_lineups += period_lineups
+                all_matchups += period_lineups
 
-            return all_lineups
+            return all_matchups
 
         except Exception as e:
             print "Error encountered"
@@ -177,4 +178,22 @@ class DataCollector:
 
         response = requests.get(url, headers=self.request_headers)
         return json.loads(response.content)['resultSets'][1]['rowSet']
+
+    def get_season_schedule(self, season):
+        """
+        Make request to get list of all games in a given season. Note: currently only available for 2016, 2015
+        """
+        base_url = 'http://data.nba.com/data/10s/v2015/json/mobile_teams/nba/{season}/league/00_full_schedule.json'
+        url = base_url.format(season=season)
+        headers = self.request_headers
+        headers['referer'] = 'http://stats.nba.com/schedule'
+        response = requests.get(url)
+        data = response.json()
+
+        schedule_list = []
+
+        for month_dict in data['lscd']:
+            schedule_list += [str(game['gid']) for game in month_dict['mscd']['g'] if game['gid'] > '002']
+
+        return schedule_list
 
