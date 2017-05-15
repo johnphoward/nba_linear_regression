@@ -90,9 +90,9 @@ class Matchup:
         for key, value in stats_b.items():
             stats_a[key] += value
 
-        stats_a['FG_PCT'] = stats_a['FGM'] * 1.0 / stats_a['FGA']
-        stats_a['FG3_PCT'] = stats_a['FG3M'] / stats_a['FG3A']
-        stats_a['FT_PCT'] = stats_a['FTM'] * 1.0 / stats_a['FTA']
+        stats_a['FG_PCT'] = stats_a['FGM'] * 1.0 / stats_a['FGA'] if stats_a['FGA'] > 0 else 0.00
+        stats_a['FG3_PCT'] = stats_a['FG3M'] / stats_a['FG3A'] if stats_a['FG3A'] > 0 else 0.00
+        stats_a['FT_PCT'] = stats_a['FTM'] * 1.0 / stats_a['FTA'] if stats_a['FTA'] > 0 else 0.00
         
         return stats_a
 
@@ -193,7 +193,7 @@ class Matchup:
             stats_to_update['PF'] += 1
             other_team_stats['PFD'] += 1
 
-        if play_type is not self.PERIOD_START:
+        if play_type is not self.PERIOD_START and self.last_timestamp is not None:
             self.seconds_played += self.last_timestamp - time_of_play
             self.minutes_played = round(self.seconds_played / 60, 1)
 

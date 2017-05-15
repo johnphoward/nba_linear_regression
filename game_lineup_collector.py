@@ -1,4 +1,5 @@
 import json
+import pickle
 import requests
 from matchup import Matchup
 
@@ -46,7 +47,7 @@ class DataCollector:
 
         self.request_headers = {
             'Accept': 'application/json, text/plain, */*',
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_5) AppleWebKit/537.36 Chrome/45.0.2454.101 Safari/537.36',
             'Host': 'stats.nba.com',
             'Referer': 'http://stats.nba.com/game/',
             'Connection': 'keep-alive'
@@ -57,32 +58,32 @@ class DataCollector:
         Given a stats.nba.com game ID number, gather all the lineups from that game
         Return a list of lineups containing all matchups between the teams and the relevant stats from those matchups
         """
-        try:
-            # first get the play by play data
-            pbp_headers, pbp_data = self.get_play_by_play_data(game_id)
+        # try:
+        # first get the play by play data
+        pbp_headers, pbp_data = self.get_play_by_play_data(game_id)
 
-            p1_index = self.PLAYER_1_TM_ID
-            team_1_id, team_2_id = tuple({play[p1_index] for play in pbp_data if play[p1_index] is not None})
-            end_period_row_numbers = [index for index, row in enumerate(pbp_data) if row[2] == self.END_PERIOD_CODE]
+        p1_index = self.PLAYER_1_TM_ID
+        team_1_id, team_2_id = tuple({play[p1_index] for play in pbp_data if play[p1_index] is not None})
+        end_period_row_numbers = [index for index, row in enumerate(pbp_data) if row[2] == self.END_PERIOD_CODE]
 
-            all_matchups = []
+        all_matchups = []
 
-            # loop through each period (quarter/OT) and get the relevant lineups for each
-            for period_index in range(len(end_period_row_numbers)):
-                period_number = period_index + 1
+        # loop through each period (quarter/OT) and get the relevant lineups for each
+        for period_index in range(len(end_period_row_numbers)):
+            period_number = period_index + 1
 
-                start_index = 0 if period_index == 0 else end_period_row_numbers[period_index - 1] + 1
-                end_index = end_period_row_numbers[period_index]
-                plays_in_period = pbp_data[start_index: end_index]
+            start_index = 0 if period_index == 0 else end_period_row_numbers[period_index - 1] + 1
+            end_index = end_period_row_numbers[period_index]
+            plays_in_period = pbp_data[start_index: end_index]
 
-                period_lineups = self.parse_out_lineups_for_period(period_number, plays_in_period, team_1_id, team_2_id)
-                all_matchups += period_lineups
+            period_lineups = self.parse_out_lineups_for_period(period_number, plays_in_period, team_1_id, team_2_id)
+            all_matchups += period_lineups
 
-            return all_matchups
+        return all_matchups
 
-        except Exception as e:
-            print "Error encountered"
-            print e
+        # except Exception as e:
+        #     print "Error encountered"
+        #     print e
 
     def get_starting_matchups(self, plays, team_1_id, team_2_id, period):
         """
@@ -105,7 +106,7 @@ class DataCollector:
                 team_list.append(out_id)
             subbed_in.add(in_id)
 
-        game_id = substitution_plays[0][0]
+        game_id = plays[0][0]
 
         # find all
         if len(team_1_starters) < 5:
@@ -162,7 +163,7 @@ class DataCollector:
         parameters['GameID'] = game_id
         url = self.build_request_url(self.play_by_play_endpoint, parameters)
 
-        response = requests.get(url, headers=self.request_headers)
+        response = requests.get(url, headers=self.request_headers, timeout=5)
         data = json.loads(response.content)['resultSets'][0]
         return data['headers'], data['rowSet']
 
@@ -179,6 +180,20 @@ class DataCollector:
         response = requests.get(url, headers=self.request_headers)
         return json.loads(response.content)['resultSets'][1]['rowSet']
 
+    def gather_and_save_season_sequentially(self, season, resume_point=0):
+        game_ids = self.get_season_schedule(season)
+
+        if resume_point > 0:
+            raw_matchups = self.load_raw_data()
+        else:
+            raw_matchups = []
+        for index, game_id in enumerate(game_ids[resume_point:]):
+            print index + resume_point, game_id
+            raw_matchups += collector.gather_single_game_lineups(game_id)
+            with open('raw_data.pickle', 'w') as f:
+                f.write(str([pickle.dumps(matchup) for matchup in raw_matchups]))
+            f.close()
+
     def get_season_schedule(self, season):
         """
         Make request to get list of all games in a given season. Note: currently only available for 2016, 2015
@@ -193,7 +208,18 @@ class DataCollector:
         schedule_list = []
 
         for month_dict in data['lscd']:
-            schedule_list += [str(game['gid']) for game in month_dict['mscd']['g'] if game['gid'] > '002']
+            schedule_list += [str(game['gid']) for game in month_dict['mscd']['g'] if game['gid'].startswith('002')]
 
         return schedule_list
 
+    @staticmethod
+    def load_raw_data():
+        with open('raw_data.pickle', 'r') as f:
+            saved_text = f.read()
+        f.close()
+        pickled_list = eval(saved_text)
+        return [pickle.loads(matchup) for matchup in pickled_list]
+
+if __name__ == '__main__':
+    collector = DataCollector()
+    # collector.gather_and_save_season_sequentially('2016', 852)
